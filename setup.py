@@ -20,7 +20,7 @@ setup(
     name="fetalnav",
     version="1.0.0",
     description="Fetal Region Detection using PyTorch",
-    url="https://gitlab.com/ntoussaint/fetalnav",
+    url="https://github.com/ntoussaint/fetalnav",
     author="Nicolas Toussaint",
     author_email="nicolas.toussaint@gmail.com",
     # Requirements

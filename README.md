@@ -2,7 +2,7 @@
 
 PyTorch implementation of the paper 'Weakly Supervised Localisation for Fetal Ultrasound Images', DLMIA'18
 
-[[Project Page]](https://gitlab.com/ntoussaint/fetalnav) [[Paper]](https://arxiv.org) [[Supp]]()
+[[Project Page]](https://github.com/ntoussaint/fetalnav) [[Paper]](https://arxiv.org) [[Supp]]()
 
 ![fetalnav overview](resources/fetalnav.png "fetalnav overview")
 
@@ -22,12 +22,12 @@ This work addresses the task of detecting and localising fetal anatomical region
 
 1. Install via pip:
     ```bash
-    [sudo] pip install git+https://<username>@gitlab.com/ntoussaint/fetalnav.git
+    [sudo] pip install git+https://github.com/ntoussaint/fetalnav.git
     ```
 
 2. Or fom source
     ```bash
-    git clone https://gitlab.com/ntoussaint/fetalnav.git
+    git clone https://github.com/ntoussaint/fetalnav.git
     cd fetalnav
     [sudo] python setup.py install
     ```
