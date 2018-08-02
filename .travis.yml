@@ -1,0 +1,23 @@
+language: generic
+
+script:
+  - mkdir public
+  - cp -R www/* public
+
+branches:
+  only:
+    - master
+
+notifications:
+  email: true
+
+deploy:
+  provider: pages
+  skip_cleanup: true
+  local_dir: public
+  github_token: $GITHUB_TOKEN # Set in the settings page of your repository, as a secure variable
+  on:
+    branch: master
+  repo: ntoussaint/fetalnav
+  target_branch: master
+  fqdn: takuti.me

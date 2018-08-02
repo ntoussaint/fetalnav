@@ -1,0 +1,15 @@
+Labels = Placenta, Limbs
+ObjectType = Image
+NDims = 3
+BinaryData = True
+BinaryDataByteOrderMSB = False
+CompressedData = False
+TransformMatrix = 1 0 0 0 1 0 0 0 1
+Offset = -40.7341 20.0193 0
+CenterOfRotation = 0 0 0
+AnatomicalOrientation = RAI
+ElementSpacing = 0.236302 0.412964 1
+ITK_InputFilterName = MetaImageIO
+DimSize = 344 387 1
+ElementType = MET_UCHAR
+ElementDataFile = image.raw
