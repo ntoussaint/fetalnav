@@ -2,7 +2,7 @@
 
 PyTorch implementation of the paper 'Weakly Supervised Localisation for Fetal Ultrasound Images', DLMIA'18
 
-[[Project Page]](https://github.com/ntoussaint/fetalnav) [[Paper]](https://arxiv.org) [[Supp]]()
+[[Project Page]](https://ntoussaint.github.io/fetalnav) [[Paper]](https://arxiv.org/abs/1808.00793) [[Supp]](https://github.com/ntoussaint/fetalnav)
 
 ![fetalnav overview](resources/fetalnav.png "fetalnav overview")
 
