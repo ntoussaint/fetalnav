@@ -52,6 +52,13 @@ Use the network to infer the region and localise regions in the image
 
 ![fetalnav evaluation](resources/evaluate.png )
 
+## Supplementary material
+
+A significant part of the training material for this study was produced using an in-house labelling tool that is available [[here]](https://github.com/ntoussaint/qmedbrowser):
+
+![qmedbrowser](resources/qmedbrowser.png)
+
+
 ## Citation
 
 If you use this code in your research, please cite:
@@ -60,7 +67,8 @@ If you use this code in your research, please cite:
     author = {Toussaint, Nicolas and Khanal, Bishesh and Sinclair, Matthew and Gomez, Alberto and Skelton, Emily and Matthew, Jacqueline and Schnabel, Julia A.},
     title = {Weakly Supervised Localisation for Fetal Ultrasound Images},
     booktitle = {Proceedings of the 4th Workshop on Deep Learning in Medical Image Analysis},
-    year = {2018}
+    year = {2018},
+    note={\href{https://arxiv.org/abs/1808.00793}{[url]}}
 }
 ```
 
