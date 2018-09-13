@@ -1,3 +1,4 @@
+numpy>=1.14
 SimpleITK>=1.0.0
 torch>=0.3.0
 torchvision>=0.2.0
