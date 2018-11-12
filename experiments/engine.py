@@ -3,6 +3,7 @@ import shutil
 import time
 import torch
 import torch.backends.cudnn as cudnn
+from torch import nn
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data
@@ -259,8 +260,6 @@ class Engine(object):
 
             self.on_forward(False, model, criterion, data_loader)
 
-            output = self.state['output']
-
             # measure elapsed time
             self.state['batch_time_current'] = time.time() - end
             self.state['batch_time'].add(self.state['batch_time_current'])
@@ -268,20 +267,24 @@ class Engine(object):
             # measure accuracy
             self.on_end_batch(False, model, criterion, data_loader)
 
-            _, gt        = torch.max(target, 1)
-            _, predicted = torch.max(output, 1)
-            c = [float(predicted[i] == gt[i]) for i in range(len(gt))]
-            for i in range(len(c)):
-                label = int(gt[i])
-                class_correct[label] += c[i]
-                class_total[label] += 1
+            # output = nn.Softmax(dim=1)(self.state['output']).data
+            output = nn.Sigmoid()(self.state['output']).data
 
-            y_gt[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'],:] = target
-            y_scores[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'],:] = output
+            y_gt[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'], :] = target
+            y_scores[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'], :] = output
+
+            for gt, pred in zip(target, output):
+                for id in torch.nonzero(gt):
+                    idx = int(id)
+                    class_correct[idx] += pred[idx]
+                    class_total[idx] += 1
 
         for i in range(len(self.state['classes'])):
+            acc = 0.
+            if class_total[i] >= 1:
+                acc = 100 * class_correct[i] / class_total[i]
             print('Accuracy of %5s : %2d %%' % (
-                self.state['classes'][i], 100 * class_correct[i] / class_total[i]))
+                self.state['classes'][i], acc))
 
         score = self.on_end_epoch(False, model, criterion, data_loader)
 
@@ -324,16 +327,7 @@ class Engine(object):
             for param_group in optimizer.param_groups:
                 param_group['lr'] = param_group['lr'] * 0.1
             print('update learning rate: lr={}'.format(param_group['lr']))
-        # lr = FGE_learning_rate(epoch=self.state['epoch'],
-        #                        max_epoch=self.state['max_epochs'],
-        #                        cycle_length=6,
-        #                        percentage_before_cycles=.5,
-        #                        lr_init=self.state['learning_rate'],
-        #                        lr_final=5e-5,
-        #                        number_of_drops=3)
-        # print('update learning rate: lr={}'.format(lr))
-        # for param_group in optimizer.param_groups:
-        #     param_group['lr'] = lr
+
 
 class MultiLabelMAPEngine(Engine):
     def __init__(self, state):

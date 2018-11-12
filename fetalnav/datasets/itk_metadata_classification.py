@@ -20,7 +20,6 @@ def _is_image_file(filename):
     """
     Is the given extension in the filename supported ?
     """
-    # FIXME: Need to add all available SimpleITK types!
     IMG_EXTENSIONS = ['.nii.gz', '.nii', '.mha', '.mhd']
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
@@ -56,31 +55,46 @@ def extractlabelfromfile(fname):
     return None
 
 
+def extractlabelsfromfile(fname):
+    with open(fname) as f:
+        for line in f:
+            if "Labels =" in line:
+                f.close()
+                return line.split(' = ')[1].strip().split(',')
+    f.close()
+    return ['']
+
+
 def find_classes(filenames):
-    classes = [extractlabelfromfile(f) for f in filenames]
-    classes = list(set(classes))
-    classes.sort()
+    classes = []
+    for idx, f in enumerate(filenames):
+        items = extractlabelsfromfile(f)
+        for c in items:
+            if len(c):
+                classes.append(c)
+            else:
+                print('Warning: file {} does not have any label'.format(f))
+
+    classes = np.sort(classes)
+    classes, counts = np.unique(classes, return_counts=True)
     class_to_idx = {classes[i]: i for i in range(len(classes))}
-    return classes, class_to_idx
+
+    labelstable = np.zeros([len(filenames), len(classes)], dtype=np.float32)
+
+    for idx, f in enumerate(filenames):
+        items = extractlabelsfromfile(f)
+        for c in items:
+            if c in classes:
+                labelstable[idx, np.where(classes == c)[0][0]] = 1
+
+    return labelstable, classes, class_to_idx, counts
 
 
-def calculate_class_cardinality(filenames):
-    _, class_to_idx = find_classes(filenames=filenames)
-    classes = [extractlabelfromfile(f) for f in filenames]
-    classes = [class_to_idx[l] for l in classes]
-    _, counts = np.unique(classes, return_counts=True)
-    return counts
-
-
-def calculate_sample_weights(filenames):
-    _, class_to_idx = find_classes(filenames=filenames)
-    classes = [extractlabelfromfile(f) for f in filenames]
-    classes = [class_to_idx[l] for l in classes]
-    _, counts = np.unique(classes, return_counts=True)
-    prob = counts / float(np.sum(counts))
-    reciprocal_weights = [prob[classes[index]] for index in range(len(classes))]
+def calculate_sample_weights(cardinalities):
+    reciprocal_weights = cardinalities / float(np.sum(cardinalities))
     weights = (1. / np.array(reciprocal_weights))
     weights = weights / np.sum(weights)
+    weights = np.array(weights, dtype=np.float64)
     return weights
 
 
@@ -148,12 +162,13 @@ class ITKMetaDataClassification(Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        classes, class_to_idx = find_classes(self.filenames)
+        labels, classes, class_to_idx, cardinality = find_classes(self.filenames)
 
+        self._labels = labels
         self.classes = classes
         self.class_to_idx = class_to_idx
-        self.class_cardinality = calculate_class_cardinality(self.filenames)
-        self.sample_weights = calculate_sample_weights(self.filenames)
+        self.class_cardinality = cardinality
+        self.sample_weights = calculate_sample_weights(self.class_cardinality)
 
     def __getitem__(self, index):
         """
@@ -167,20 +182,15 @@ class ITKMetaDataClassification(Dataset):
         """
 
         image = load_image(self.filenames[index])
-        labels = None
 
-        label = load_metadata(image, 'Label')
-        if label is not None:
-            labels = [0] * len(self.classes)
-            labels[self.class_to_idx[label]] = 1
-            labels = np.array(labels, dtype=np.float32)
+        labels = self.get_labels_from_index(index)
 
         if self.transform is not None:
-            image = self.transform(image)
+            image = self.transform(image).float()
         if self.target_transform is not None:
             labels = self.target_transform(labels)
 
-        if (self.mode == 'infer') or (labels is None):
+        if (self.mode == 'infer') or not len(labels):
             return image
         else:
             return image, labels
@@ -202,3 +212,6 @@ class ITKMetaDataClassification(Dataset):
     
     def get_sample_weights(self):
         return self.sample_weights
+
+    def get_labels_from_index(self, index):
+        return self._labels[index]

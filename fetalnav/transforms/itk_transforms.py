@@ -63,7 +63,6 @@ class ToNumpy(object):
         return ret
 
 
-
 class ToTensor(object):
     """Convert an itkImage or ``numpy.ndarray`` to tensor.
     Converts a itkImage (W x H x D) or numpy.ndarray (D x H X W) to a
@@ -85,16 +84,13 @@ class ToTensor(object):
         for idx, _input in enumerate(inputs):
             _input_is_numpy = False
             if isinstance(_input, sitk.SimpleITK.Image):
-                # Get numpy array (is a deep copy!)
                 _input = sitk.GetArrayFromImage(_input)
                 _input_is_numpy = True
-            #print(f'input or converted numpy array type: {_input.dtype}')
-            _input = torch.from_numpy(_input.astype(np.double))
-            #_input = torch.from_numpy(_input)
+            _input = torch.from_numpy(_input.astype(np.float))
             if _input_is_numpy:
-                _input = _input.permute(2,1,0) #Change size from
-            # float for backward compatibility ?
-            outputs.append(_input.float())
+                _input = _input.permute(2, 1, 0)
+
+            outputs.append(_input)
         return outputs if idx > 0 else outputs[0]
 
 

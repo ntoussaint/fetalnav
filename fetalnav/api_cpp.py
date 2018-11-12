@@ -1,37 +1,49 @@
 import os
 import numpy as np
 import torch
-import torchvision.transforms as torchtransforms
+from torchvision import transforms as torchtransforms
+from PIL import Image
 
-from .models.spn_models import vgg16_sp
+
+from .models.spn_models import vgg16_sp, vgg13_sp, resnet18_sp
 from .transforms import tensor_transforms as tensortransforms
 
-
-datadir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
-modelfile = os.path.join(datadir, 'vgg16_sp_miccai2018.pth.tar')
+# datadir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
+# modelfile = os.path.join(datadir, 'vgg16_sp_miccai2018.pth.tar')
+modelfile = '/home/nt08/Projects/fetalnav-github/experiments/logs/cs=pol-m=vgg13_bn-lr=0.05-bs=7-spn=1-aspect=1.5/checkpoint_17.pth.tar'
 classes = ['Abdomen', 'Background', 'Head', 'Limbs', 'Placenta', 'Spine', 'Thorax']
 
+desiredaspect = 1.5
+desiredsize = [224] * 2
+cropping = True
 
 # transform a numpy array into a torch tensor
 totensor = torchtransforms.ToTensor()
 # crop to an aspect ratio
-crop = tensortransforms.CropToRatio(outputaspect=1.5)
+crop = tensortransforms.CropToRatio(outputaspect=desiredaspect)
 # padd the responses according the the initial crop:
-padd = tensortransforms.PaddToRatio(outputaspect=1.5)
+padd = tensortransforms.PaddToRatio(outputaspect=desiredaspect)
 # resize image to fixed size
-resize = tensortransforms.Resize(size=[224, 224], interp='bilinear')
+resize = tensortransforms.Resize(size=desiredsize, interp='bilinear')
 # rescale tensor to  interval
 rescale = tensortransforms.Rescale(interval=(0, 1))
 # rescale responses so they are between 0 and 255:
 descale = tensortransforms.Rescale(interval=(0, 255))
 
-transform = torchtransforms.Compose(
-                [totensor,
-                 crop,
-                 resize,
-                 rescale])
+if cropping:
+    transform = torchtransforms.Compose(
+                    [totensor,
+                     crop,
+                     resize,
+                     rescale])
+else:
+    transform = torchtransforms.Compose(
+                    [totensor,
+                     resize,
+                     rescale])
 
-vgg = vgg16_sp(len(classes), num_maps=512, batch_norm=True, in_channels=1)
+# vgg = resnet18_sp(len(classes), num_maps=512, in_channels=1)
+vgg = vgg13_sp(len(classes), num_maps=512, batch_norm=True, in_channels=1)
 
 print('loading network: {}'.format(modelfile))
 checkpoint = torch.load(modelfile)
@@ -58,7 +70,7 @@ def generate_outputs(model, in_var):
     # enable spn inference mode
     model = hook_spn(model)
     # predict scores
-    scores = torch.nn.Softmax(dim=1)(model(in_var)).data.cpu().squeeze()
+    scores = torch.nn.Sigmoid()(model(in_var)).data.cpu().squeeze()
     # instantiate maps
     maps = F.upsample(model.class_response_maps, size=(in_var.size(2), in_var.size(3)), mode='bilinear').data
     return scores.numpy(), maps
@@ -76,25 +88,46 @@ def getprediction(image_cpp, verbose=False):
         image_cpp = np.array(image_cpp, dtype=np.float32)
         # check image size
         size = image_cpp.shape
+        inputaspect = size[0]/size[1]
         # ensure the size is enough
         if size[0] < 50 or size[1] < 50:
-            print ("[fetalnav] - WARNING: image size is invalid: {}".format(size))
+            print("[fetalnav] - WARNING: image size is invalid: {}".format(size))
             return defaultret, None
         # reshape to get a 3 dimensional image with 1 as z
         npimage = np.reshape(image_cpp, [size[0], size[1], 1])
+        Image.fromarray(npimage.squeeze().astype(np.uint8)).save("/tmp/npimage.png")
         # create the torch variable valid for model input
         torchinput = Variable(transform(npimage).unsqueeze(0))
+
+        # Image.fromarray(descale(transform(npimage)).squeeze().numpy().astype(np.uint8)).save("/tmp/torchinput.png")
 
         # predict the class
         output, responses = generate_outputs(vgg, torchinput)
 
-        responses = descale(responses)
-        responses = padd(responses)
-        # resize the responses to the initial input size:
-        desize = tensortransforms.Resize(size=size, interp='bilinear')
-        responses = desize(responses)
-        # impose dtype to uint8
+        # responses = descale(responses)
+        responses = torch.stack([descale(responses[i]) for i in range(responses.size(0))])
+
+        if cropping:
+            newsize = list(size)
+            if inputaspect > desiredaspect:
+                newsize[0] = int(size[0] * desiredaspect / inputaspect)
+            else:
+                newsize[1] = int(size[1] * inputaspect / desiredaspect)
+
+            # resize the responses to the initial input size:
+            desize = tensortransforms.Resize(size=newsize, interp='bilinear')
+            responses = desize(responses)
+
+            padd = tensortransforms.PaddToRatio(outputaspect=inputaspect)
+            responses = padd(responses)
+        else:
+            desize = tensortransforms.Resize(size=size, interp='bilinear')
+            responses = desize(responses)
+
         responses = responses.cpu().numpy().squeeze().astype(np.uint8)
+
+        # Image.fromarray(responses[0]).save("/tmp/abdoresponse.png")
+        # Image.fromarray(responses[3]).save("/tmp/limbsresponse.png")
 
         # optionally save the highest response map
         if verbose is True:

@@ -26,4 +26,4 @@ __all__ = [
     'transforms'
 ]
 
-from .api_cpp import getlabels, getprediction
+# from .api_cpp import getlabels, getprediction
