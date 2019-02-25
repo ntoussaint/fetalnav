@@ -57,6 +57,8 @@ class Engine(object):
         if self._state('maximize') is None:
             self.state['maximize'] = False
 
+        self.state['device'] = 'cuda' if self.state['use_gpu'] else 'cpu'
+
         # meters
         self.state['meter_loss'] = tnt.meter.AverageValueMeter()
         # time measure
@@ -95,7 +97,7 @@ class Engine(object):
 
     def on_end_batch(self, training, model, criterion, data_loader, optimizer=None):
         # record loss
-        self.state['loss_batch'] = self.state['loss'].data[0]
+        self.state['loss_batch'] = self.state['loss'].item()
         self.state['meter_loss'].add(self.state['loss_batch'])
         if training:
             log_str = 'batch/loss/train'
@@ -106,8 +108,8 @@ class Engine(object):
 
     def on_forward(self, training, model, criterion, data_loader, optimizer=None):
 
-        input_var = torch.autograd.Variable(self.state['input'])
-        target_var = torch.autograd.Variable(self.state['target'])
+        input_var = self.state['input']
+        target_var = self.state['target']
 
         if not training:
             input_var.volatile = True
@@ -196,8 +198,8 @@ class Engine(object):
             self.state['data_time_batch'] = time.time() - end
             self.state['data_time'].add(self.state['data_time_batch'])
             self.state['total_iteration_train'] = self.state['total_iteration_train']+1
-            self.state['input'] = input
-            self.state['target'] = target
+            self.state['input'] = input.to(self.state['device'])
+            self.state['target'] = target.to(self.state['device'])
             if 'train_class_weights' in self.state.keys():
                 weights = np.array([ self.state['train_class_weights'][idx] for idx in np.argmax(target.numpy(), axis=1) ])
                 self.state['weights'] = torch.Tensor(weights)
@@ -237,47 +239,49 @@ class Engine(object):
 
         end = time.time()
 
-        for i, (input, target) in enumerate(data_loader):
-            # measure data loading time
-            self.state['iteration'] = i
-            self.state['data_time_batch'] = time.time() - end
-            self.state['data_time'].add(self.state['data_time_batch'])
-            self.state['total_iteration_test'] = self.state['total_iteration_test']+1
+        with torch.no_grad():
+            for i, (input, target) in enumerate(data_loader):
+                # measure data loading time
+                self.state['iteration'] = i
+                self.state['data_time_batch'] = time.time() - end
+                self.state['data_time'].add(self.state['data_time_batch'])
+                self.state['total_iteration_test'] = self.state['total_iteration_test']+1
 
-            self.state['input'] = input
-            self.state['target'] = target
-            if 'val_class_weights' in self.state.keys():
-                weights = np.array([ self.state['val_class_weights'][idx] for idx in np.argmax(target.numpy(), axis=1) ])
-                self.state['weights'] = torch.Tensor(weights)
-            else:
-                self.state['weights'] = None
-            self.on_start_batch(False, model, criterion, data_loader)
+                self.state['input'] = input.to(self.state['device'])
+                self.state['target'] = target.to(self.state['device'])
 
-            target = self.state['target']
+                if 'val_class_weights' in self.state.keys():
+                    weights = np.array([ self.state['val_class_weights'][idx] for idx in np.argmax(target.numpy(), axis=1) ])
+                    self.state['weights'] = torch.Tensor(weights)
+                else:
+                    self.state['weights'] = None
+                self.on_start_batch(False, model, criterion, data_loader)
 
-            if self.state['use_gpu']:
-                self.state['target'] = self.state['target'].cuda(async=True)
+                target = self.state['target']
 
-            self.on_forward(False, model, criterion, data_loader)
+                if self.state['use_gpu']:
+                    self.state['target'] = self.state['target'].cuda(async=True)
 
-            # measure elapsed time
-            self.state['batch_time_current'] = time.time() - end
-            self.state['batch_time'].add(self.state['batch_time_current'])
-            end = time.time()
-            # measure accuracy
-            self.on_end_batch(False, model, criterion, data_loader)
+                self.on_forward(False, model, criterion, data_loader)
 
-            # output = nn.Softmax(dim=1)(self.state['output']).data
-            output = nn.Sigmoid()(self.state['output']).data
+                # measure elapsed time
+                self.state['batch_time_current'] = time.time() - end
+                self.state['batch_time'].add(self.state['batch_time_current'])
+                end = time.time()
+                # measure accuracy
+                self.on_end_batch(False, model, criterion, data_loader)
 
-            y_gt[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'], :] = target
-            y_scores[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'], :] = output
+                # output = nn.Softmax(dim=1)(self.state['output']).data
+                output = nn.Sigmoid()(self.state['output']).data
 
-            for gt, pred in zip(target, output):
-                for id in torch.nonzero(gt):
-                    idx = int(id)
-                    class_correct[idx] += pred[idx]
-                    class_total[idx] += 1
+                y_gt[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'], :] = target
+                y_scores[self.state['iteration']*self.state['batch_size']:(self.state['iteration']+1)*self.state['batch_size'], :] = output
+
+                for gt, pred in zip(target, output):
+                    for id in torch.nonzero(gt):
+                        idx = int(id)
+                        class_correct[idx] += pred[idx]
+                        class_total[idx] += 1
 
         for i in range(len(self.state['classes'])):
             acc = 0.
@@ -370,7 +374,7 @@ class MultiLabelMAPEngine(Engine):
 
     def on_end_batch(self, training, model, criterion, data_loader, optimizer=None):
         # record loss
-        self.state['loss_batch'] = self.state['loss'].data[0]
+        self.state['loss_batch'] = self.state['loss'].item()
         self.state['meter_loss'].add(self.state['loss_batch'])
         self.state['ap_meter'].add(self.state['output'].data, self.state['target'], self.state['weights'])
 
